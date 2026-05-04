@@ -717,10 +717,16 @@ var K = {
   STOP:10, TAKE:90, WARN:5, LOOK:42,
   AUTO_MS:5*60*1000, IDLE_MS:15*60*1000,
   DB:'riskboard', VER:1,
+  // 프록시 목록 — 병렬 경쟁 방식으로 가장 빠른 것 사용
   PROXIES:[
     'https://api.allorigins.win/raw?url=',
-    'https://corsproxy.io/?',
-    'https://api.codetabs.com/v1/proxy?quest='
+    'https://corsproxy.io/?url=',
+    'https://api.codetabs.com/v1/proxy?quest=',
+    'https://proxy.cors.sh/',
+    'https://cors.eu.org/',
+    'https://thingproxy.freeboard.io/fetch/',
+    'https://api.corsflare.workers.dev/?url=',
+    'https://crossorigin.me/'
   ],
   // ② 자동완성용 기본 종목 목록
   STOCKS:{
@@ -948,27 +954,85 @@ function recordHistory() {
 //  시세 조회 (CORS 프록시 → 네이버)
 // ════════════════════════════════════════════════════════
 async function fetchWithProxy(url) {
-  // ⑦ 오프라인 상태 먼저 확인
-  if(typeof navigator.onLine !== 'undefined' && !navigator.onLine) {
+  // 오프라인 확인
+  if (typeof navigator.onLine !== 'undefined' && !navigator.onLine) {
     toast('📵 오프라인 상태입니다. 인터넷 연결을 확인해 주세요.', true);
     return null;
   }
-  for(var i=0;i<K.PROXIES.length;i++){
-    try{
-      var r=await fetch(K.PROXIES[i]+encodeURIComponent(url),{signal:AbortSignal.timeout(8000)});
-      if(r.ok){
-        var text=await r.text();
-        if(text&&text.length>100) return text;
+
+  // 1순위: 네이버 모바일 JSON API 직접 시도 (가장 빠름)
+  var codeMatch = url.match(/code=(\d{6})/);
+  if (codeMatch) {
+    try {
+      var code = codeMatch[1];
+      var naverApi = 'https://m.stock.naver.com/api/stock/' + code + '/basic';
+      var r0 = await fetch(naverApi, {signal: AbortSignal.timeout(5000)});
+      if (r0.ok) {
+        var j = await r0.json();
+        if (j && j.closePrice) {
+          // JSON을 HTML처럼 감싸서 기존 파서가 읽을 수 있게
+          return '__NAVER_JSON__' + JSON.stringify(j);
+        }
       }
-    }catch(e){ console.warn('proxy',i,'failed:',e.message); }
+    } catch(e) { console.warn('naver direct:', e.message); }
   }
-  return null;
+
+  // 2순위: 병렬 경쟁 — 모든 프록시 동시 요청, 가장 빠른 것 사용
+  var encodedUrl = encodeURIComponent(url);
+  var controllers = [];
+
+  var racePromises = K.PROXIES.map(function(proxy, i) {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    if (ctrl) controllers.push(ctrl);
+    var signal = ctrl ? ctrl.signal : undefined;
+    var proxyUrl = proxy + encodedUrl;
+    return fetch(proxyUrl, signal ? {signal: signal} : {})
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function(text) {
+        if (!text || text.length < 100) throw new Error('empty');
+        // 다른 요청 취소
+        controllers.forEach(function(c, ci) { if (ci !== i) { try{c.abort();}catch(e){} } });
+        return text;
+      });
+  });
+
+  try {
+    // 타임아웃 추가 (6초)
+    var timeoutP = new Promise(function(_, reject) {
+      setTimeout(function() { reject(new Error('timeout')); }, 6000);
+    });
+    var result = await Promise.any
+      ? Promise.any(racePromises.concat([timeoutP.catch(function(e){throw e;})])
+          .map(function(p){ return p.catch(function(e){throw e;}); }))
+      : await Promise.race(racePromises.map(function(p){
+          return p.catch(function(){return null;});
+        })).then(function(r){ if(!r) throw new Error('all failed'); return r; });
+    return result;
+  } catch(e) {
+    console.warn('모든 프록시 실패:', e.message);
+    return null;
+  }
 }
 
 async function fetchNaverPrice(code, lookback) {
-  // 현재가
   var html=await fetchWithProxy('https://finance.naver.com/item/sise.naver?code='+code);
   if(!html) return null;
+
+  // 네이버 모바일 JSON 직접 응답 처리
+  if (html.startsWith('__NAVER_JSON__')) {
+    try {
+      var j = JSON.parse(html.replace('__NAVER_JSON__',''));
+      var cur = parseInt(String(j.closePrice||j.currentPrice||'').replace(/,/g,''));
+      var high52 = parseInt(String(j.high52Price||j.highPrice||cur).replace(/,/g,''));
+      if (cur >= 100) {
+        return {cur: cur, high: high52 || cur};
+      }
+    } catch(e) { console.warn('naver json parse:', e); }
+    return null;
+  }
   var cur=null;
   var m=html.match(/id="_nowVal"[^>]*>([\d,]+)/);
   if(m){var v=parseInt(m[1].replace(/,/g,''));if(v>=100&&v<=99999999)cur=v;}
@@ -1088,7 +1152,7 @@ async function doSearch() {
     // ③ searchCode를 fetch 전에 설정 — fetch 실패해도 코드 유지
     ST._searchCode=code;
     var res=await fetchNaverPrice(code, look);
-    if(!res) throw new Error('시세 조회 실패. 직접 입력해 주세요');
+    if(!res) throw new Error('시세 조회 실패 — 아래에 직접 입력하시거나 잠시 후 다시 시도해 주세요');
     $('f-cur').value=res.cur;
     $('f-high').value=res.high;
     setChip('ok',esc($('f-name').value||code)+'('+code+') · '+fmt(res.cur)+'원 · 고가 '+fmt(res.high)+'원');
@@ -1141,7 +1205,12 @@ async function refreshAll() {
   });
 
   checkCustomAlerts();    // ④ 커스텀 알림 체크
-  toast('갱신 완료');
+  var failCnt = ST.stocks.filter(function(s){return s.refreshFail;}).length;
+  if (failCnt > 0) {
+    toast('갱신 완료 (시세 실패 ' + failCnt + '개 — 잠시 후 ↻ 다시 시도)', true);
+  } else {
+    toast('✅ 갱신 완료 — ' + ST.stocks.length + '개 종목');
+  }
   if(btn){btn.disabled=false;btn.textContent='↻';}
 }
 
