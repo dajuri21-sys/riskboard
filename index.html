@@ -597,7 +597,7 @@ body.light .loading-overlay{background:#f8fafc;}
       <div class="setting-row">
         <div>
           <div class="setting-label">서버 유형</div>
-          <div class="setting-sub">처음엔 모의투자 → 정상 확인 후 실거래</div>
+          <div class="setting-sub">ON = 실전투자 서버 &nbsp;|&nbsp; OFF = 모의투자 서버</div>
         </div>
         <button class="toggle on" id="kis-mock-toggle" onclick="toggleKisMock()"></button>
       </div>
@@ -1026,6 +1026,7 @@ async function kisGetToken() {
     return ST._kisToken;
   }
   var base = ST._kisMock ? K.KIS_MOCK : K.KIS_BASE;
+  console.log('[KIS] 서버:', base, '| mock:', ST._kisMock);
   try {
     var r = await fetch(base + '/oauth2/tokenP', {
       method: 'POST',
@@ -1988,6 +1989,9 @@ async function kisApply() {
   ST._kisKey    = key;
   ST._kisSecret = secret;
   ST._kisToken  = null; // 토큰 초기화 → 재발급
+  // 토글 상태 직접 확인 (ON=실전투자, OFF=모의투자)
+  var tog = $('kis-mock-toggle');
+  if (tog) ST._kisMock = tog.classList.contains('off'); // off=모의투자, on=실전투자
   kisSaveConfig();
   var el = $('kis-status');
   if (el) el.textContent = '연결 테스트 중…';
