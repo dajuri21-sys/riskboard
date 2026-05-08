@@ -2273,10 +2273,10 @@ function init(){
   if (!ST._kisKey) {
     ST._kisKey    = 'PSZ3eVBfCXYF8djUlzsvn4rDN7dxwz1XGmQJ';
     ST._kisSecret = 'gW3Ar+r7Riv19SY98PkKQms8v92cdqxX48LLAG0c7nesTA515tod8drtoaQOco+rVqFV4kBbHlYNjSLgy8TEmX94lYYNnErjpkSPCcOto4PBhN6mzWiGWBhAkmwBPwKZxzpn9NzHAZFHSMMTEyvPGaDz+50TISOxhWjIvB/XQX+zYBP35bQ=';
-    ST._kisMock   = false; // 실전투자
+    ST._kisMock   = false;
     kisSaveConfig();
   }
-  if ($('kis-key'))    $('kis-key').value    = ST._kisKey;
+    if ($('kis-key'))    $('kis-key').value    = ST._kisKey;
   if ($('kis-secret')) $('kis-secret').value = ST._kisSecret;
   var kisMogTog = $('kis-mock-toggle');
   if (kisMogTog) {
