@@ -619,7 +619,7 @@ body.light .loading-overlay{background:#f8fafc;}
       </div>
       <div class="setting-row">
         <div class="setting-label">시세 조회</div>
-        <div class="setting-val" style="font-size:11px;text-align:right">네이버 금융 / CORS 프록시</div>
+        <div class="setting-val" style="font-size:11px;text-align:right">KIS API / Cloudflare Workers</div>
       </div>
     </div>
   </div>
@@ -751,8 +751,8 @@ var K = {
   STOP:10, TAKE:90, WARN:5, LOOK:42,
   AUTO_MS:5*60*1000, IDLE_MS:15*60*1000,
   DB:'riskboard', VER:1,
-  // KIS API 엔드포인트
-  KIS_BASE: 'https://openapi.koreainvestment.com:9443',
+  // KIS API — Cloudflare Workers 프록시 경유 (CORS 해결)
+  KIS_BASE: 'https://kis-proxy.dajuri21.workers.dev',
   KIS_MOCK: 'https://openapivts.koreainvestment.com:29443',
   // 네이버 폴백용 프록시
   PROXIES:[
