@@ -1316,7 +1316,19 @@ async function doSearch() {
     // 코드 확인
     var code=/^\d{6}$/.test(q)?q:null;
     if(!code){
-      // 이름으로 코드 검색 (네이버 검색)
+      // 1순위: AC_STOCKS 내장 목록에서 검색 (네트워크 불필요)
+      var upper=q.toUpperCase();
+      var found=Object.keys(AC_STOCKS).find(function(n){
+        return n.toUpperCase()===upper || n.toUpperCase().startsWith(upper);
+      });
+      if(found){ code=AC_STOCKS[found]; $('f-name').value=found; }
+    }
+    if(!code){
+      // 2순위: ST._searchCode (자동완성으로 선택된 경우)
+      if(ST._searchCode && /^\d{6}$/.test(ST._searchCode)) code=ST._searchCode;
+    }
+    if(!code){
+      // 3순위: 네이버 검색 폴백
       var sh=await fetchWithProxy(
         'https://finance.naver.com/search/searchList.naver?query='+encodeURIComponent(q));
       if(sh){
@@ -1324,7 +1336,7 @@ async function doSearch() {
         if(cm){code=cm[1]; $('f-name').value=cm[2].trim();}
       }
     }
-    if(!code) throw new Error('"'+q+'" 종목을 찾을 수 없습니다');
+    if(!code) throw new Error('"'+q+'" 종목을 찾을 수 없습니다. 자동완성에서 선택해 주세요');
     // ③ searchCode를 fetch 전에 설정 — fetch 실패해도 코드 유지
     ST._searchCode=code;
     var res=await fetchNaverPrice(code, look);
