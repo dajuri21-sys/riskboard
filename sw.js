@@ -1,5 +1,5 @@
-// RISKBOARD Service Worker — 오프라인 지원
-const CACHE = 'riskboard-v1';
+// RISKBOARD Service Worker
+const CACHE = 'riskboard-v5';
 const ASSETS = ['./index.html', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -19,8 +19,18 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // 외부 API(시세 조회)는 캐시 안 함
   if (!e.request.url.startsWith(self.location.origin)) return;
+  // index.html은 항상 네트워크 우선 (최신 버전 보장)
+  if (e.request.url.includes('index.html') || e.request.url.endsWith('/')) {
+    e.respondWith(
+      fetch(e.request).then(r => {
+        var rc = r.clone();
+        caches.open(CACHE).then(c => c.put(e.request, rc));
+        return r;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request))
   );
